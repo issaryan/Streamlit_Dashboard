@@ -1,0 +1,21 @@
+# Core dependencies
+streamlit==1.32.0
+pandas==2.0.3
+numpy==1.24.3
+
+# Notebook execution
+papermill==2.4.0
+nbformat==5.9.2
+nbconvert==7.16.4
+
+# Machine Learning
+scikit-learn==1.3.2
+joblib==1.3.2
+
+# Visualization
+plotly==5.18.0
+matplotlib==3.8.2
+seaborn==0.13.0
+
+# Additional utilities
+ipykernel==6.29.4

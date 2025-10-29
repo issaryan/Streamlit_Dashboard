@@ -1,0 +1,52 @@
+[theme]
+# Couleur principale (violet/indigo)
+primaryColor = "#818CF8"
+
+# Couleur de fond principale (noir/gris très foncé)
+backgroundColor = "#0f1419"
+
+# Couleur de fond secondaire (gris foncé)
+secondaryBackgroundColor = "#1f2937"
+
+# Couleur du texte (blanc)
+textColor = "#FFFFFF"
+
+# Police
+font = "sans serif"
+
+[server]
+# Taille maximale des fichiers uploadés (en MB)
+maxUploadSize = 200
+
+# Activer la protection XSRF
+enableXsrfProtection = true
+
+# CORS
+enableCORS = false
+
+# Port (automatique sur Streamlit Cloud)
+# port = 8501
+
+# Activer WebSocket compression
+enableWebsocketCompression = true
+
+[browser]
+# Ne pas collecter les statistiques d'usage
+gatherUsageStats = false
+
+# Titre de l'onglet du navigateur
+serverAddress = "localhost"
+
+[runner]
+# Exécution plus rapide
+magicEnabled = true
+
+# Réexécution automatique sur changement de fichier (dev uniquement)
+fastReruns = true
+
+[client]
+# Afficher la toolbar de développement
+toolbarMode = "auto"
+
+# Afficher l'icône du menu
+showErrorDetails = true
