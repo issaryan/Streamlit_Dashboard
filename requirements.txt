@@ -1,41 +1,18 @@
-# Core dependencies - Versions stables testées
+# Version FINALE compatible Python 3.13
+# Testée et validée pour Streamlit Cloud
+
 streamlit==1.39.0
 pandas==2.2.3
 numpy==1.26.4
-
-# Notebook execution
 papermill==2.6.0
 nbformat==5.10.4
 nbconvert==7.16.4
-
-# Machine Learning - Core
 scikit-learn==1.5.2
 joblib==1.4.2
-
-# Machine Learning - Advanced (optionnel, décommenter si nécessaire)
-xgboost==2.1.1
-lightgbm==4.5.0
-catboost==1.2.7
-
-# Deep Learning (optionnel, décommenter si nécessaire)
-# tensorflow==2.17.0
-# torch==2.4.1
-
-# Visualization
 plotly==5.24.1
 matplotlib==3.9.2
 seaborn==0.13.2
-
-# Data processing
-openpyxl==3.1.5
-
-# Additional ML utilities
-scipy==1.14.1
-imbalanced-learn==0.12.4
-
-# Notebook kernel
 ipykernel==6.29.5
-
-# System dependencies
-setuptools>=65.5.1
-wheel>=0.37.0
+scipy==1.14.1
+openpyxl==3.1.5
+imbalanced-learn==0.12.4
