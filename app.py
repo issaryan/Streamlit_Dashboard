@@ -7,8 +7,9 @@ import nbformat
 import tempfile
 import os
 import base64
-from plotly.io import from_json
+import json
 import time
+import plotly.graph_objects as go
 
 # --- Configuration de la page ---
 st.set_page_config(
@@ -609,32 +610,29 @@ def render_notebook(notebook_path):
                 with st.expander(f"Code de la cellule #{cell_number}", expanded=False):
                     st.code(cell.source, language='python')
                 
+                has_output = False
+                
                 for output in cell.outputs:
                     if output.output_type == 'stream':
                         # Afficher les sorties texte (print)
                         if hasattr(output, 'text') and output.text.strip():
                             st.text(output.text)
+                            has_output = True
                         
                     elif output.output_type in ('display_data', 'execute_result'):
                         data = output.data
                         
-                        # HTML (tableaux pandas, etc.)
-                        if 'text/html' in data:
-                            html_content = data['text/html']
-                            # Filtrer le JavaScript de Plotly
-                            if 'plotly' not in html_content.lower():
-                                st.markdown(html_content, unsafe_allow_html=True)
-                        
-                        # Images PNG (Matplotlib, Seaborn)
-                        elif 'image/png' in data:
+                        # Images PNG (Matplotlib, Seaborn) - PRIORITÉ
+                        if 'image/png' in data:
                             try:
                                 import base64
                                 img_data = base64.b64decode(data['image/png'])
-                                st.image(img_data, use_column_width=True)
+                                st.image(img_data, use_column_width=True, caption=f"Figure de la cellule #{cell_number}")
+                                has_output = True
                             except Exception as e:
                                 st.warning(f"Impossible d'afficher l'image: {str(e)}")
                         
-                        # Graphiques Plotly
+                        # Graphiques Plotly - FORMAT JSON
                         elif 'application/vnd.plotly.v1+json' in data:
                             try:
                                 import json
@@ -655,22 +653,37 @@ def render_notebook(notebook_path):
                                 )
                                 
                                 st.plotly_chart(fig, use_container_width=True)
+                                has_output = True
                             except Exception as e:
-                                st.error(f"Erreur lors de l'affichage du graphique Plotly: {str(e)}")
-                                with st.expander("Détails de l'erreur"):
-                                    st.code(str(e))
+                                st.error(f"Erreur Plotly: {str(e)}")
+                        
+                        # HTML (tableaux pandas, graphiques en HTML)
+                        elif 'text/html' in data:
+                            html_content = data['text/html']
+                            # Filtrer le JavaScript de Plotly mais garder le HTML
+                            if '<div' in html_content or '<table' in html_content:
+                                st.markdown(html_content, unsafe_allow_html=True)
+                                has_output = True
                         
                         # Texte brut
                         elif 'text/plain' in data:
                             text_content = data['text/plain']
                             # Ne pas afficher si c'est juste une référence d'objet
                             if not text_content.startswith('<') and len(text_content.strip()) > 0:
-                                st.text(text_content)
+                                # Ne pas afficher les représentations de figures vides
+                                if 'Figure' not in text_content and 'matplotlib' not in text_content.lower():
+                                    st.text(text_content)
+                                    has_output = True
                     
                     elif output.output_type == 'error':
                         st.error(f"Erreur détectée: {output.ename} - {output.evalue}")
                         with st.expander("Voir la trace complète de l'erreur"):
                             st.code('\n'.join(output.traceback))
+                        has_output = True
+                
+                # Si aucune sortie n'a été affichée, indiquer que c'est normal
+                if not has_output:
+                    st.info("Cette cellule n'a produit aucune sortie visible (ou les figures n'ont pas été capturées dans le notebook).")
                 
                 st.markdown("---")
                 cell_number += 1
