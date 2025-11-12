@@ -436,6 +436,14 @@ def adapt_notebook_for_dataset(notebook_file, dataset_path):
 
 import pandas as pd
 import os
+import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings('ignore')
+
+# Configuration pour afficher les graphiques
+import matplotlib
+matplotlib.use('Agg')  # Backend pour sauvegarder les figures
+plt.ioff()  # Mode non-interactif pour capturer les sorties
 
 # Chemin du dataset uploadé sur la plateforme
 DATASET_PATH = r'{dataset_path}'
@@ -459,6 +467,9 @@ if os.path.exists(DATASET_PATH):
     
     print(f"✅ Dataset chargé avec succès: {{df.shape[0]}} lignes, {{df.shape[1]}} colonnes")
     print(f"📊 Colonnes disponibles: {{list(df.columns)}}")
+    
+    # Afficher un aperçu
+    display(df.head())
 else:
     print(f"❌ Erreur: Fichier non trouvé à {{DATASET_PATH}}")
     df = pd.DataFrame()  # DataFrame vide par sécurité
@@ -535,37 +546,63 @@ def render_notebook(notebook_path):
         section_header("fas fa-chart-line", "Résultats de l'analyse")
         
         cell_number = 1
+        total_cells = len([cell for cell in nb.cells if cell.cell_type == 'code'])
+        
+        st.info(f"📊 Le notebook contient {total_cells} cellules de code. Affichage des résultats...")
+        
         for i, cell in enumerate(nb.cells):
             
             if cell.cell_type == 'markdown':
                 st.markdown(cell.source)
                 
-            elif cell.cell_type == 'code' and cell.outputs:
-                with st.expander(f"Code de la cellule #{cell_number}", expanded=False):
+            elif cell.cell_type == 'code':
+                # Afficher le code dans un expander
+                with st.expander(f"💻 Code de la cellule #{cell_number}", expanded=False):
                     st.code(cell.source, language='python')
+                
+                # Vérifier s'il y a des sorties
+                if not cell.outputs:
+                    st.caption(f"ℹ️ Cellule #{cell_number}: Pas de sortie (code exécuté sans affichage)")
+                    cell_number += 1
+                    continue
                 
                 has_output = False
                 
-                for output in cell.outputs:
+                # Traiter chaque sortie
+                for output_idx, output in enumerate(cell.outputs):
+                    
+                    # === STREAM OUTPUT (print statements) ===
                     if output.output_type == 'stream':
                         if hasattr(output, 'text') and output.text.strip():
                             st.text(output.text)
                             has_output = True
-                        
+                    
+                    # === DISPLAY_DATA / EXECUTE_RESULT ===
                     elif output.output_type in ('display_data', 'execute_result'):
                         data = output.data
                         
-                        # Images PNG
+                        # 1. Images PNG (Matplotlib, Seaborn) - PRIORITÉ MAXIMALE
                         if 'image/png' in data:
                             try:
                                 img_data = base64.b64decode(data['image/png'])
-                                st.image(img_data, use_column_width=True, caption=f"Figure de la cellule #{cell_number}")
+                                st.image(img_data, use_column_width=True, caption=f"📈 Figure de la cellule #{cell_number}")
                                 has_output = True
+                                continue  # Skip autres formats pour cette sortie
                             except Exception as e:
-                                st.warning(f"Impossible d'afficher l'image: {str(e)}")
+                                st.warning(f"⚠️ Impossible d'afficher l'image: {str(e)}")
                         
-                        # Graphiques Plotly
-                        elif 'application/vnd.plotly.v1+json' in data:
+                        # 2. Images JPEG
+                        if 'image/jpeg' in data:
+                            try:
+                                img_data = base64.b64decode(data['image/jpeg'])
+                                st.image(img_data, use_column_width=True, caption=f"📈 Figure de la cellule #{cell_number}")
+                                has_output = True
+                                continue
+                            except Exception as e:
+                                st.warning(f"⚠️ Impossible d'afficher l'image JPEG: {str(e)}")
+                        
+                        # 3. Graphiques Plotly (JSON)
+                        if 'application/vnd.plotly.v1+json' in data:
                             try:
                                 plotly_data = data['application/vnd.plotly.v1+json']
                                 
@@ -581,43 +618,62 @@ def render_notebook(notebook_path):
                                 
                                 st.plotly_chart(fig, use_container_width=True)
                                 has_output = True
+                                continue
                             except Exception as e:
-                                st.error(f"Erreur Plotly: {str(e)}")
+                                st.error(f"❌ Erreur Plotly: {str(e)}")
                         
-                        # HTML
-                        elif 'text/html' in data:
+                        # 4. HTML (tableaux pandas, etc.)
+                        if 'text/html' in data:
                             html_content = data['text/html']
+                            # Vérifier que c'est du vrai HTML (pas juste des balises vides)
                             if '<div' in html_content or '<table' in html_content:
-                                st.markdown(html_content, unsafe_allow_html=True)
-                                has_output = True
+                                # Nettoyer le HTML des scripts Plotly si présents
+                                if 'plotly' not in html_content.lower():
+                                    st.markdown(html_content, unsafe_allow_html=True)
+                                    has_output = True
+                                    continue
                         
-                        # Texte brut
-                        elif 'text/plain' in data:
+                        # 5. Texte brut (résultats, DataFrames en mode texte)
+                        if 'text/plain' in data:
                             text_content = data['text/plain']
-                            if not text_content.startswith('<') and len(text_content.strip()) > 0:
-                                if 'Figure' not in text_content and 'matplotlib' not in text_content.lower():
+                            # Filtrer les représentations d'objets inutiles
+                            if (not text_content.startswith('<') and 
+                                len(text_content.strip()) > 0 and
+                                'Figure' not in text_content and
+                                'matplotlib.figure.Figure' not in text_content and
+                                'AxesSubplot' not in text_content):
+                                
+                                # Vérifier si c'est un DataFrame
+                                if '\n' in text_content and ('|' in text_content or text_content.count(' ') > 10):
+                                    st.text(text_content)
+                                    has_output = True
+                                # Ou d'autres résultats textuels
+                                elif len(text_content) < 5000:  # Limiter la taille
                                     st.text(text_content)
                                     has_output = True
                     
+                    # === ERRORS ===
                     elif output.output_type == 'error':
-                        st.error(f"Erreur détectée: {output.ename} - {output.evalue}")
-                        with st.expander("Voir la trace complète de l'erreur"):
+                        st.error(f"❌ Erreur détectée dans la cellule #{cell_number}: {output.ename} - {output.evalue}")
+                        with st.expander("🔍 Voir la trace complète de l'erreur"):
                             st.code('\n'.join(output.traceback))
                         has_output = True
                 
+                # Si aucune sortie n'a été capturée
                 if not has_output:
-                    st.info("Cette cellule n'a produit aucune sortie visible.")
+                    st.caption(f"ℹ️ Cellule #{cell_number}: Code exécuté sans sortie visible")
                 
                 st.markdown("---")
                 cell_number += 1
         
+        st.success(f"✅ Toutes les {total_cells} cellules ont été exécutées et affichées!")
         st.markdown('</div>', unsafe_allow_html=True)
 
     except FileNotFoundError:
-        st.warning("Le fichier de résultats n'a pas encore été généré. Veuillez lancer une analyse.")
+        st.warning("⚠️ Le fichier de résultats n'a pas encore été généré. Veuillez lancer une analyse.")
     except Exception as e:
-        st.error(f"Une erreur est survenue lors de la lecture du notebook : {e}")
-        with st.expander("Détails de l'erreur"):
+        st.error(f"❌ Une erreur est survenue lors de la lecture du notebook : {e}")
+        with st.expander("🔍 Détails de l'erreur"):
             import traceback
             st.code(traceback.format_exc())
 
@@ -655,12 +711,15 @@ def execute_notebook_job(notebook_file, dataset_file):
         # Chemin de sortie
         output_path = os.path.join(tempfile.gettempdir(), f"output_{int(time.time())}.ipynb")
         
-        # Exécuter le notebook adapté
+        # Exécuter le notebook adapté avec capture des sorties
         pm.execute_notebook(
             input_path=adapted_notebook_path,
             output_path=output_path,
             kernel_name='python3',
-            progress_bar=False
+            progress_bar=False,
+            # CRUCIAL: Ces paramètres garantissent la capture de toutes les sorties
+            request_save_on_cell_execute=True,
+            autosave_cell_every=1
         )
         
         progress_bar.progress(100)
