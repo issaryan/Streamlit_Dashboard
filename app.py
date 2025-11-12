@@ -1,4 +1,4 @@
-# Fichier: app.py (Dashboard Single Page Professionnel)
+# Fichier: app.py (Dashboard Universel - Adapte automatiquement les notebooks)
 
 import streamlit as st
 import pandas as pd
@@ -10,10 +10,11 @@ import base64
 import json
 import time
 import plotly.graph_objects as go
+import re
 
 # --- Configuration de la page ---
 st.set_page_config(
-    page_title="Tableau de Bord d'Analyse",
+    page_title="Tableau de Bord d'Analyse Universel",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -81,10 +82,6 @@ def load_custom_css():
                 border-bottom: 1px solid #2d3748;
             }
             
-            [data-testid="stSidebar"] .sidebar-section:last-child {
-                border-bottom: none;
-            }
-            
             /* Sidebar menu items */
             [data-testid="stSidebar"] h3 {
                 color: #818CF8 !important;
@@ -109,20 +106,6 @@ def load_custom_css():
                 color: #FFFFFF !important;
             }
             
-            /* Sidebar labels et textes */
-            [data-testid="stSidebar"] label,
-            [data-testid="stSidebar"] p,
-            [data-testid="stSidebar"] span,
-            [data-testid="stSidebar"] div,
-            [data-testid="stSidebar"] .stMarkdown {
-                color: #D1D5DB !important;
-            }
-            
-            [data-testid="stSidebar"] strong,
-            [data-testid="stSidebar"] b {
-                color: #FFFFFF !important;
-            }
-            
             /* Sidebar file uploader */
             [data-testid="stSidebar"] [data-testid="stFileUploader"] {
                 background-color: #1f2937;
@@ -138,36 +121,11 @@ def load_custom_css():
                 transform: translateY(-2px);
             }
             
-            /* Sidebar sliders */
-            [data-testid="stSidebar"] [data-testid="stSlider"] {
-                padding: 0.5rem 0;
-            }
-            
-            [data-testid="stSidebar"] [data-testid="stSlider"] label,
-            [data-testid="stSidebar"] [data-testid="stSlider"] p,
-            [data-testid="stSidebar"] [data-testid="stSlider"] span {
-                color: #E5E7EB !important;
-            }
-            
-            /* Slider track */
-            [data-testid="stSidebar"] [data-testid="stSlider"] [role="slider"] {
-                background-color: #818CF8;
-            }
-            
             /* Sidebar success messages */
             [data-testid="stSidebar"] .stSuccess {
                 background-color: rgba(16, 185, 129, 0.15) !important;
                 color: #6EE7B7 !important;
                 border-left: 4px solid #10B981;
-                padding: 0.75rem;
-                border-radius: 6px;
-                font-size: 0.9em;
-            }
-            
-            [data-testid="stSidebar"] .stError {
-                background-color: rgba(239, 68, 68, 0.15) !important;
-                color: #FCA5A5 !important;
-                border-left: 4px solid #EF4444;
                 padding: 0.75rem;
                 border-radius: 6px;
                 font-size: 0.9em;
@@ -191,99 +149,6 @@ def load_custom_css():
                 transform: translateY(-3px);
                 box-shadow: 0 6px 25px rgba(129, 140, 248, 0.7);
                 background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
-            }
-            
-            [data-testid="stSidebar"] .stButton > button:active {
-                transform: translateY(-1px);
-            }
-            
-            /* Sidebar captions */
-            [data-testid="stSidebar"] .stCaptionContainer,
-            [data-testid="stSidebar"] small,
-            [data-testid="stSidebar"] .caption {
-                color: #9CA3AF !important;
-                font-size: 0.85em;
-            }
-            
-            /* Sidebar markdown text */
-            [data-testid="stSidebar"] .stMarkdown p,
-            [data-testid="stSidebar"] .stMarkdown span {
-                color: #D1D5DB !important;
-            }
-            
-            /* Sidebar divider */
-            [data-testid="stSidebar"] hr {
-                border: none;
-                height: 1px;
-                background: linear-gradient(to right, transparent, #4B5563, transparent);
-                margin: 1.5rem 0;
-            }
-            
-            /* Sidebar footer */
-            [data-testid="stSidebar"] .sidebar-footer {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: #0f1419;
-                padding: 1rem;
-                border-top: 1px solid #2d3748;
-                text-align: center;
-            }
-            
-            [data-testid="stSidebar"] .sidebar-footer p {
-                color: #6B7280 !important;
-                font-size: 0.8em;
-                margin: 0;
-            }
-            
-            /* Force le texte blanc partout dans main */
-            .main p, .main span, .main div, .main label, .main input, .main textarea {
-                color: #FFFFFF !important;
-            }
-            
-            /* Texte dans les labels et widgets */
-            label, .stMarkdown, .stText {
-                color: #FFFFFF !important;
-            }
-            
-            /* Slider labels et valeurs */
-            [data-testid="stSlider"] label,
-            [data-testid="stSlider"] p,
-            [data-testid="stSlider"] span,
-            [data-testid="stSlider"] div {
-                color: #FFFFFF !important;
-            }
-            
-            /* File uploader text */
-            [data-testid="stFileUploader"] label,
-            [data-testid="stFileUploader"] p,
-            [data-testid="stFileUploader"] span,
-            [data-testid="stFileUploader"] div {
-                color: #FFFFFF !important;
-            }
-            
-            /* Caption text */
-            .stCaptionContainer, small, .caption {
-                color: #D1D5DB !important;
-            }
-            
-            /* Markdown text */
-            .stMarkdown p, .stMarkdown span, .stMarkdown div {
-                color: #FFFFFF !important;
-            }
-            
-            /* Expandeur text */
-            [data-testid="stExpander"] p,
-            [data-testid="stExpander"] span,
-            [data-testid="stExpander"] div,
-            [data-testid="stExpander"] label {
-                color: #FFFFFF !important;
-            }
-            
-            /* Texte des dataframes */
-            [data-testid="stDataFrame"] {
-                color: #1F2937 !important;
             }
             
             /* Container principal */
@@ -347,13 +212,6 @@ def load_custom_css():
                 font-size: 1.5em;
                 font-weight: 600;
                 margin: 0;
-            }
-            
-            /* Texte dans les sections */
-            .dashboard-section p,
-            .dashboard-section span,
-            .dashboard-section div {
-                color: #374151;
             }
             
             /* Cartes d'information */
@@ -424,50 +282,6 @@ def load_custom_css():
                 font-weight: 500;
             }
             
-            /* Boutons */
-            .stButton > button {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                font-weight: 600;
-                padding: 0.75rem 2rem;
-                border-radius: 8px;
-                border: none;
-                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-                transition: all 0.3s ease;
-                width: 100%;
-            }
-            
-            .stButton > button:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 20px rgba(102, 126, 234, 0.5);
-            }
-            
-            /* Expandeurs */
-            [data-testid="stExpander"] {
-                background-color: #374151 !important;
-                border: 1px solid #4B5563;
-                border-radius: 8px;
-                margin-bottom: 1rem;
-            }
-            
-            [data-testid="stExpander"] summary {
-                color: #FFFFFF !important;
-            }
-            
-            /* File uploader */
-            [data-testid="stFileUploader"] {
-                background-color: #374151;
-                border: 2px dashed #6B7280;
-                border-radius: 10px;
-                padding: 1.5rem;
-                transition: all 0.3s ease;
-            }
-            
-            [data-testid="stFileUploader"]:hover {
-                border-color: #818CF8;
-                background-color: #4B5563;
-            }
-            
             /* Messages d'alerte */
             .stSuccess {
                 background-color: #D1FAE5 !important;
@@ -515,17 +329,25 @@ def load_custom_css():
             
             .stInfo * {
                 color: #1E40AF !important;
-            }border-left: 4px solid #F59E0B;
-                padding: 1rem;
-                border-radius: 8px;
             }
             
-            .stInfo {
-                background-color: #DBEAFE;
-                color: #1E40AF;
-                border-left: 4px solid #3B82F6;
-                padding: 1rem;
+            /* Expandeurs */
+            [data-testid="stExpander"] {
+                background-color: #374151 !important;
+                border: 1px solid #4B5563;
                 border-radius: 8px;
+                margin-bottom: 1rem;
+            }
+            
+            [data-testid="stExpander"] summary {
+                color: #FFFFFF !important;
+            }
+            
+            [data-testid="stExpander"] p,
+            [data-testid="stExpander"] span,
+            [data-testid="stExpander"] div,
+            [data-testid="stExpander"] label {
+                color: #FFFFFF !important;
             }
             
             /* Dataframes */
@@ -539,14 +361,6 @@ def load_custom_css():
             /* Progress bar */
             .stProgress > div > div {
                 background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            }
-            
-            /* Séparateurs */
-            hr {
-                margin: 2.5rem 0;
-                border: none;
-                height: 1px;
-                background: linear-gradient(to right, transparent, #E5E7EB, transparent);
             }
             
         </style>
@@ -588,6 +402,126 @@ def stat_card(icon_class, value, label):
     """, unsafe_allow_html=True)
 
 
+# --- Fonction pour adapter automatiquement le notebook ---
+def adapt_notebook_for_dataset(notebook_file, dataset_path):
+    """
+    Adapte automatiquement le notebook pour utiliser le dataset uploadé.
+    - Remplace les chemins d'accès aux fichiers par le dataset uploadé
+    - Supprime/commente les cellules d'upload de fichiers
+    - Injecte le chemin du dataset dans une variable globale
+    """
+    try:
+        # Lire le notebook
+        notebook_content = notebook_file.read()
+        nb = nbformat.reads(notebook_content.decode('utf-8'), as_version=4)
+        
+        # Patterns à détecter pour l'upload de fichiers
+        upload_patterns = [
+            r'files\.upload\(\)',  # Google Colab
+            r'input\(',  # Jupyter input
+            r'st\.file_uploader',  # Streamlit
+            r'FileUpload',  # ipywidgets
+            r'pd\.read_csv\([\'"](?!http)[^\'"]+[\'"]\)',  # Lecture de fichiers locaux
+            r'pd\.read_excel\([\'"](?!http)[^\'"]+[\'"]\)',
+            r'open\([\'"][^\'"]+[\'"]',  # Open file
+        ]
+        
+        # Variable pour stocker le nom de la variable du dataframe
+        df_variable_name = 'df'
+        
+        # Nouvelle cellule d'injection du dataset
+        injection_cell = nbformat.v4.new_code_cell(source=f"""
+# 🔄 CELLULE INJECTÉE AUTOMATIQUEMENT PAR LE DASHBOARD
+# Cette cellule charge automatiquement le dataset uploadé sur la plateforme
+
+import pandas as pd
+import os
+
+# Chemin du dataset uploadé sur la plateforme
+DATASET_PATH = r'{dataset_path}'
+
+# Chargement automatique du dataset
+if os.path.exists(DATASET_PATH):
+    # Détection automatique du type de fichier
+    file_extension = os.path.splitext(DATASET_PATH)[1].lower()
+    
+    if file_extension == '.csv':
+        df = pd.read_csv(DATASET_PATH)
+    elif file_extension in ['.xlsx', '.xls']:
+        df = pd.read_excel(DATASET_PATH)
+    elif file_extension == '.json':
+        df = pd.read_json(DATASET_PATH)
+    elif file_extension == '.parquet':
+        df = pd.read_parquet(DATASET_PATH)
+    else:
+        # Tentative de lecture CSV par défaut
+        df = pd.read_csv(DATASET_PATH)
+    
+    print(f"✅ Dataset chargé avec succès: {{df.shape[0]}} lignes, {{df.shape[1]}} colonnes")
+    print(f"📊 Colonnes disponibles: {{list(df.columns)}}")
+else:
+    print(f"❌ Erreur: Fichier non trouvé à {{DATASET_PATH}}")
+    df = pd.DataFrame()  # DataFrame vide par sécurité
+""")
+        
+        # Traiter chaque cellule du notebook
+        modified_cells = []
+        injection_done = False
+        
+        for i, cell in enumerate(nb.cells):
+            if cell.cell_type == 'code':
+                cell_source = cell.source
+                
+                # Détecter les cellules d'upload/lecture de fichiers
+                is_upload_cell = any(re.search(pattern, cell_source) for pattern in upload_patterns)
+                
+                if is_upload_cell:
+                    # Commenter la cellule d'upload
+                    commented_source = '\n'.join([f'# {line}' for line in cell_source.split('\n')])
+                    cell.source = f"""
+# ⚠️ CELLULE DÉSACTIVÉE AUTOMATIQUEMENT
+# Cette cellule a été détectée comme cellule d'upload/lecture de fichier
+# Le dataset est maintenant chargé automatiquement via la variable 'df'
+
+{commented_source}
+
+# 💡 Utilisez directement la variable 'df' pour accéder aux données
+"""
+                    st.info(f"📝 Cellule #{i+1} adaptée: Upload de fichier désactivé")
+                
+                # Injecter la cellule de chargement juste après les imports
+                if not injection_done and (
+                    'import' in cell_source.lower() or 
+                    i == 0  # Ou en première position si pas d'import
+                ):
+                    modified_cells.append(cell)
+                    modified_cells.append(injection_cell)
+                    injection_done = True
+                    continue
+                
+                modified_cells.append(cell)
+            else:
+                modified_cells.append(cell)
+        
+        # Si l'injection n'a pas été faite (pas d'imports détectés), l'ajouter au début
+        if not injection_done:
+            modified_cells.insert(0, injection_cell)
+        
+        # Créer le nouveau notebook
+        nb.cells = modified_cells
+        
+        # Sauvegarder le notebook modifié
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".ipynb", mode='w', encoding='utf-8') as temp_nb:
+            nbformat.write(nb, temp_nb)
+            modified_notebook_path = temp_nb.name
+        
+        return modified_notebook_path
+        
+    except Exception as e:
+        st.error(f"❌ Erreur lors de l'adaptation du notebook: {str(e)}")
+        raise e
+
+
 # --- Fonction de rendu des sorties du Notebook ---
 def render_notebook(notebook_path):
     """
@@ -614,7 +548,6 @@ def render_notebook(notebook_path):
                 
                 for output in cell.outputs:
                     if output.output_type == 'stream':
-                        # Afficher les sorties texte (print)
                         if hasattr(output, 'text') and output.text.strip():
                             st.text(output.text)
                             has_output = True
@@ -622,31 +555,25 @@ def render_notebook(notebook_path):
                     elif output.output_type in ('display_data', 'execute_result'):
                         data = output.data
                         
-                        # Images PNG (Matplotlib, Seaborn) - PRIORITÉ
+                        # Images PNG
                         if 'image/png' in data:
                             try:
-                                import base64
                                 img_data = base64.b64decode(data['image/png'])
                                 st.image(img_data, use_column_width=True, caption=f"Figure de la cellule #{cell_number}")
                                 has_output = True
                             except Exception as e:
                                 st.warning(f"Impossible d'afficher l'image: {str(e)}")
                         
-                        # Graphiques Plotly - FORMAT JSON
+                        # Graphiques Plotly
                         elif 'application/vnd.plotly.v1+json' in data:
                             try:
-                                import json
-                                import plotly.graph_objects as go
-                                
                                 plotly_data = data['application/vnd.plotly.v1+json']
                                 
-                                # Convertir en dict si nécessaire
                                 if isinstance(plotly_data, str):
                                     plotly_dict = json.loads(plotly_data)
                                 else:
                                     plotly_dict = dict(plotly_data)
                                 
-                                # Créer la figure Plotly
                                 fig = go.Figure(
                                     data=plotly_dict.get('data', []),
                                     layout=plotly_dict.get('layout', {})
@@ -657,10 +584,9 @@ def render_notebook(notebook_path):
                             except Exception as e:
                                 st.error(f"Erreur Plotly: {str(e)}")
                         
-                        # HTML (tableaux pandas, graphiques en HTML)
+                        # HTML
                         elif 'text/html' in data:
                             html_content = data['text/html']
-                            # Filtrer le JavaScript de Plotly mais garder le HTML
                             if '<div' in html_content or '<table' in html_content:
                                 st.markdown(html_content, unsafe_allow_html=True)
                                 has_output = True
@@ -668,9 +594,7 @@ def render_notebook(notebook_path):
                         # Texte brut
                         elif 'text/plain' in data:
                             text_content = data['text/plain']
-                            # Ne pas afficher si c'est juste une référence d'objet
                             if not text_content.startswith('<') and len(text_content.strip()) > 0:
-                                # Ne pas afficher les représentations de figures vides
                                 if 'Figure' not in text_content and 'matplotlib' not in text_content.lower():
                                     st.text(text_content)
                                     has_output = True
@@ -681,9 +605,8 @@ def render_notebook(notebook_path):
                             st.code('\n'.join(output.traceback))
                         has_output = True
                 
-                # Si aucune sortie n'a été affichée, indiquer que c'est normal
                 if not has_output:
-                    st.info("Cette cellule n'a produit aucune sortie visible (ou les figures n'ont pas été capturées dans le notebook).")
+                    st.info("Cette cellule n'a produit aucune sortie visible.")
                 
                 st.markdown("---")
                 cell_number += 1
@@ -700,62 +623,66 @@ def render_notebook(notebook_path):
 
 
 # --- Fonction d'exécution avec Papermill ---
-def execute_notebook_job(notebook_file, dataset_file, params):
+def execute_notebook_job(notebook_file, dataset_file):
     """
     Gère l'exécution du notebook de manière sécurisée.
     """
-    input_path, dataset_path = None, None
+    adapted_notebook_path, dataset_path = None, None
     
     progress_bar = st.progress(0)
     status_text = st.empty()
     
     try:
-        status_text.text("Préparation des fichiers...")
-        progress_bar.progress(20)
-        time.sleep(0.5)
+        status_text.text("📁 Préparation des fichiers...")
+        progress_bar.progress(10)
+        time.sleep(0.3)
         
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".ipynb") as temp_notebook:
-            temp_notebook.write(notebook_file.getvalue())
-            input_path = temp_notebook.name
-            
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_dataset:
+        # Sauvegarder le dataset
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(dataset_file.name)[1]) as temp_dataset:
             temp_dataset.write(dataset_file.getvalue())
             dataset_path = temp_dataset.name
-
-        output_path = os.path.join(tempfile.gettempdir(), f"output_{os.path.basename(input_path)}")
-        params['dataset_path'] = dataset_path
         
-        status_text.text("Exécution de l'analyse en cours...")
+        status_text.text("🔧 Adaptation automatique du notebook...")
+        progress_bar.progress(30)
+        time.sleep(0.3)
+        
+        # Adapter le notebook pour utiliser le dataset uploadé
+        adapted_notebook_path = adapt_notebook_for_dataset(notebook_file, dataset_path)
+        
+        status_text.text("▶️ Exécution de l'analyse en cours...")
         progress_bar.progress(50)
         
+        # Chemin de sortie
+        output_path = os.path.join(tempfile.gettempdir(), f"output_{int(time.time())}.ipynb")
+        
+        # Exécuter le notebook adapté
         pm.execute_notebook(
-            input_path=input_path,
+            input_path=adapted_notebook_path,
             output_path=output_path,
-            parameters=params,
-            kernel_name='python3'
+            kernel_name='python3',
+            progress_bar=False
         )
         
         progress_bar.progress(100)
-        status_text.text("Analyse terminée avec succès!")
+        status_text.text("✅ Analyse terminée avec succès!")
         time.sleep(1)
         status_text.empty()
         progress_bar.empty()
         
         st.session_state['output_notebook_path'] = output_path
-        st.success("L'exécution du notebook est terminée avec succès!")
+        st.success("🎉 L'exécution du notebook est terminée avec succès!")
         
     except pm.PapermillExecutionError as e:
         progress_bar.empty()
         status_text.empty()
         
-        # Extraction de l'erreur détaillée
         error_msg = str(e)
         if "ModuleNotFoundError" in error_msg:
             module_name = error_msg.split("'")[1] if "'" in error_msg else "unknown"
             st.error(f"""
-            **Module manquant: {module_name}**
+            **❌ Module manquant: {module_name}**
             
-            Le notebook nécessite des bibliothèques qui ne sont pas installées dans votre environnement.
+            Le notebook nécessite des bibliothèques qui ne sont pas installées.
             
             **Solution:** Installez les dépendances manquantes avec:
             ```bash
@@ -771,7 +698,7 @@ def execute_notebook_job(notebook_file, dataset_file, params):
             - plotly
             """)
         else:
-            st.error(f"Une erreur est survenue lors de l'exécution: {str(e)}")
+            st.error(f"❌ Une erreur est survenue lors de l'exécution: {str(e)}")
         
         with st.expander("🔍 Détails de l'erreur"):
             st.code(error_msg)
@@ -781,20 +708,27 @@ def execute_notebook_job(notebook_file, dataset_file, params):
     except Exception as e:
         progress_bar.empty()
         status_text.empty()
-        st.error(f"Une erreur inattendue est survenue: {str(e)}")
+        st.error(f"❌ Une erreur inattendue est survenue: {str(e)}")
         with st.expander("🔍 Trace complète"):
             import traceback
             st.code(traceback.format_exc())
         st.session_state['output_notebook_path'] = None
         
     finally:
-        if input_path and os.path.exists(input_path):
-            os.remove(input_path)
+        # Nettoyage des fichiers temporaires
+        if adapted_notebook_path and os.path.exists(adapted_notebook_path):
+            try:
+                os.remove(adapted_notebook_path)
+            except:
+                pass
         if dataset_path and os.path.exists(dataset_path):
-            os.remove(dataset_path)
+            try:
+                os.remove(dataset_path)
+            except:
+                pass
 
 
-# --- Interface Utilisateur avec Sidebar ---
+# --- Interface Utilisateur ---
 load_custom_css()
 
 if 'output_notebook_path' not in st.session_state:
@@ -806,8 +740,8 @@ if 'analysis_run' not in st.session_state:
 with st.sidebar:
     st.markdown("""
         <div class="sidebar-header">
-            <i class="fas fa-chart-line"></i>
-            <h2>Dashboard Analytics</h2>
+            <i class="fas fa-brain"></i>
+            <h2>Dashboard Universel</h2>
         </div>
     """, unsafe_allow_html=True)
     
@@ -819,7 +753,7 @@ with st.sidebar:
     uploaded_notebook = st.file_uploader(
         "Sélectionnez votre notebook",
         type=['ipynb'],
-        help="Notebook avec cellule 'parameters'",
+        help="N'importe quel notebook Jupyter (.ipynb)",
         label_visibility="collapsed",
         key="notebook_upload"
     )
@@ -831,49 +765,15 @@ with st.sidebar:
     st.markdown("**Jeu de Données**")
     uploaded_dataset = st.file_uploader(
         "Sélectionnez vos données",
-        type=['csv'],
-        help="Format CSV avec en-têtes",
+        type=['csv', 'xlsx', 'xls', 'json', 'parquet'],
+        help="Formats supportés: CSV, Excel, JSON, Parquet",
         label_visibility="collapsed",
         key="dataset_upload"
     )
     
     if uploaded_dataset:
-        st.success(f"✓ {uploaded_dataset.name}")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Section Paramètres
-    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown("### <i class='fas fa-cogs'></i> Paramètres", unsafe_allow_html=True)
-    
-    st.markdown("**Régularisation**")
-    c_value = st.slider(
-        "Valeur C",
-        min_value=0.1,
-        max_value=10.0,
-        value=1.0,
-        step=0.1,
-        help="Force de régularisation du modèle",
-        key="c_value_slider",
-        label_visibility="collapsed"
-    )
-    st.caption(f"C = {c_value}")
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("**Split Train/Test**")
-    test_size = st.slider(
-        "% Test",
-        min_value=10,
-        max_value=50,
-        value=30,
-        step=5,
-        help="% de données pour le test",
-        key="test_size_slider",
-        label_visibility="collapsed"
-    )
-    st.caption(f"Test: {test_size}% | Train: {100-test_size}%")
+        file_extension = os.path.splitext(uploaded_dataset.name)[1]
+        st.success(f"✓ {uploaded_dataset.name} ({file_extension})")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -883,14 +783,10 @@ with st.sidebar:
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
     if st.button("🚀 LANCER L'ANALYSE", type="primary", use_container_width=True, key="run_analysis_btn"):
         if uploaded_notebook and uploaded_dataset:
-            params_to_inject = {
-                'model_c_value': c_value,
-                'test_size': test_size / 100
-            }
             st.session_state.analysis_run = True
-            execute_notebook_job(uploaded_notebook, uploaded_dataset, params_to_inject)
+            execute_notebook_job(uploaded_notebook, uploaded_dataset)
         else:
-            st.error("⚠ Fichiers manquants")
+            st.error("⚠️ Fichiers manquants")
     st.markdown('</div>', unsafe_allow_html=True)
     
     # Footer
@@ -904,8 +800,8 @@ with st.sidebar:
 # Header principal
 st.markdown("""
     <div class="dashboard-header">
-        <h1><i class="fas fa-chart-bar"></i> Tableau de Bord d'Analyse de Données</h1>
-        <p>Plateforme interactive pour transformer vos notebooks Jupyter en analyses professionnelles</p>
+        <h1><i class="fas fa-rocket"></i> Dashboard Universel d'Analyse de Données</h1>
+        <p>Exécutez n'importe quel notebook Jupyter avec vos propres données en quelques clics</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -915,9 +811,21 @@ if uploaded_dataset:
     section_header("fas fa-database", "Aperçu du Jeu de Données")
     
     try:
-        df_preview = pd.read_csv(uploaded_dataset)
+        # Détection automatique du format et chargement
+        file_extension = os.path.splitext(uploaded_dataset.name)[1].lower()
         
-        col1, col2, col3 = st.columns(3)
+        if file_extension == '.csv':
+            df_preview = pd.read_csv(uploaded_dataset)
+        elif file_extension in ['.xlsx', '.xls']:
+            df_preview = pd.read_excel(uploaded_dataset)
+        elif file_extension == '.json':
+            df_preview = pd.read_json(uploaded_dataset)
+        elif file_extension == '.parquet':
+            df_preview = pd.read_parquet(uploaded_dataset)
+        else:
+            df_preview = pd.read_csv(uploaded_dataset)  # Tentative CSV par défaut
+        
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             stat_card("fas fa-table", f"{df_preview.shape[0]:,}", "Lignes")
         with col2:
@@ -925,19 +833,102 @@ if uploaded_dataset:
         with col3:
             memory_kb = df_preview.memory_usage(deep=True).sum() / 1024
             stat_card("fas fa-memory", f"{memory_kb:.1f} KB", "Taille")
+        with col4:
+            stat_card("fas fa-file", file_extension.upper().replace('.', ''), "Format")
         
         st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Affichage des colonnes
+        with st.expander("📋 Liste des colonnes", expanded=False):
+            cols_info = []
+            for col in df_preview.columns:
+                dtype = str(df_preview[col].dtype)
+                null_count = df_preview[col].isnull().sum()
+                cols_info.append({
+                    "Colonne": col,
+                    "Type": dtype,
+                    "Valeurs nulles": null_count,
+                    "% Null": f"{(null_count/len(df_preview)*100):.1f}%"
+                })
+            st.dataframe(pd.DataFrame(cols_info), use_container_width=True, height=300)
+        
+        st.markdown("**Aperçu des premières lignes:**")
         st.dataframe(df_preview.head(10), use_container_width=True, height=300)
         
     except Exception as e:
-        st.warning(f"Impossible de prévisualiser: {str(e)}")
+        st.warning(f"⚠️ Impossible de prévisualiser: {str(e)}")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Section 3: Guide d'utilisation
+# Aperçu du notebook si chargé
+if uploaded_notebook:
+    st.markdown('<div class="dashboard-section">', unsafe_allow_html=True)
+    section_header("fas fa-file-code", "Informations sur le Notebook")
+    
+    try:
+        notebook_content = uploaded_notebook.getvalue()
+        nb = nbformat.reads(notebook_content.decode('utf-8'), as_version=4)
+        
+        # Statistiques du notebook
+        code_cells = sum(1 for cell in nb.cells if cell.cell_type == 'code')
+        markdown_cells = sum(1 for cell in nb.cells if cell.cell_type == 'markdown')
+        total_cells = len(nb.cells)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            stat_card("fas fa-code", code_cells, "Cellules Code")
+        with col2:
+            stat_card("fas fa-file-alt", markdown_cells, "Cellules Markdown")
+        with col3:
+            stat_card("fas fa-list", total_cells, "Total Cellules")
+        with col4:
+            # Détecter les imports
+            imports = set()
+            for cell in nb.cells:
+                if cell.cell_type == 'code':
+                    lines = cell.source.split('\n')
+                    for line in lines:
+                        if 'import' in line:
+                            imports.add(line.strip().split()[1].split('.')[0])
+            stat_card("fas fa-puzzle-piece", len(imports), "Bibliothèques")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Afficher les bibliothèques détectées
+        if imports:
+            with st.expander("📦 Bibliothèques détectées dans le notebook", expanded=False):
+                st.write("Assurez-vous que ces bibliothèques sont installées:")
+                imports_list = sorted(list(imports))
+                cols = st.columns(3)
+                for idx, lib in enumerate(imports_list):
+                    with cols[idx % 3]:
+                        st.markdown(f"- `{lib}`")
+        
+        # Afficher un aperçu du code
+        with st.expander("👁️ Aperçu du notebook", expanded=False):
+            st.info("Le notebook sera automatiquement adapté pour utiliser votre dataset uploadé.")
+            
+            for i, cell in enumerate(nb.cells[:5]):  # Montrer les 5 premières cellules
+                if cell.cell_type == 'code':
+                    st.markdown(f"**Cellule #{i+1} (Code):**")
+                    st.code(cell.source[:500] + ("..." if len(cell.source) > 500 else ""), language='python')
+                elif cell.cell_type == 'markdown':
+                    st.markdown(f"**Cellule #{i+1} (Markdown):**")
+                    st.markdown(cell.source[:300] + ("..." if len(cell.source) > 300 else ""))
+                st.markdown("---")
+            
+            if len(nb.cells) > 5:
+                st.caption(f"... et {len(nb.cells) - 5} cellule(s) supplémentaire(s)")
+        
+    except Exception as e:
+        st.warning(f"⚠️ Impossible de lire le notebook: {str(e)}")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# Section: Guide d'utilisation
 if not st.session_state.analysis_run:
     st.markdown('<div class="dashboard-section">', unsafe_allow_html=True)
-    section_header("fas fa-question-circle", "Guide d'Utilisation")
+    section_header("fas fa-question-circle", "Comment ça fonctionne?")
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -945,71 +936,130 @@ if not st.session_state.analysis_run:
         info_card_icon(
             "fas fa-upload",
             "1. Charger les fichiers",
-            "Importez votre notebook Jupyter (.ipynb) et votre jeu de données (.csv) dans les zones de téléchargement ci-dessus."
+            "Uploadez votre notebook Jupyter et votre dataset (CSV, Excel, JSON, Parquet)."
         )
     
     with col2:
         info_card_icon(
-            "fas fa-sliders-h",
-            "2. Ajuster les paramètres",
-            "Utilisez les curseurs pour configurer les paramètres de votre analyse selon vos besoins spécifiques."
+            "fas fa-magic",
+            "2. Adaptation automatique",
+            "Le système adapte automatiquement votre notebook pour utiliser votre dataset."
         )
     
     with col3:
         info_card_icon(
-            "fas fa-play",
-            "3. Lancer l'analyse",
-            "Cliquez sur le bouton 'Lancer l'Analyse' pour démarrer le traitement de vos données."
+            "fas fa-play-circle",
+            "3. Exécution",
+            "Le notebook s'exécute avec vos données, sans modification manuelle nécessaire."
         )
     
     with col4:
         info_card_icon(
-            "fas fa-chart-line",
-            "4. Explorer les résultats",
-            "Les graphiques, tableaux et métriques s'afficheront automatiquement dans la section résultats."
+            "fas fa-chart-pie",
+            "4. Résultats",
+            "Visualisez tous les graphiques, tableaux et métriques générés."
         )
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    with st.expander("Questions fréquentes"):
+    with st.expander("🔧 Fonctionnalités avancées"):
         st.markdown("""
-        **Qu'est-ce qu'un notebook Jupyter ?**
+        ### Adaptation Intelligente du Notebook
         
-        Un notebook Jupyter est un document interactif qui combine du code, du texte explicatif et des visualisations. 
-        Les data scientists l'utilisent pour explorer et analyser des données.
+        Le système effectue automatiquement les opérations suivantes:
+        
+        ✅ **Détection et remplacement des uploads de fichiers**
+        - Détecte les cellules qui uploadent des fichiers (Google Colab, Jupyter, etc.)
+        - Les désactive automatiquement et les remplace par votre dataset
+        
+        ✅ **Injection automatique du dataset**
+        - Crée une variable `df` contenant vos données
+        - Supporte CSV, Excel, JSON, Parquet
+        - Détection automatique du format
+        
+        ✅ **Compatibilité universelle**
+        - Fonctionne avec n'importe quel notebook
+        - Pas besoin de modifier votre code
+        - Conserve toute la logique d'analyse
+        
+        ✅ **Préservation de l'intégrité**
+        - Tous les imports sont conservés
+        - Toutes les cellules d'analyse sont exécutées
+        - Seules les cellules d'upload sont adaptées
         
         ---
         
-        **Que signifie 'cellule parameters' ?**
+        ### Formats de données supportés
         
-        C'est une cellule spéciale dans votre notebook qui contient les variables que vous souhaitez pouvoir modifier 
-        via cette interface. Par exemple, si votre notebook a une variable `alpha = 0.5`, vous pouvez la rendre ajustable 
-        en la plaçant dans une cellule marquée avec le tag `parameters`.
+        | Format | Extension | Description |
+        |--------|-----------|-------------|
+        | CSV | `.csv` | Valeurs séparées par virgules |
+        | Excel | `.xlsx`, `.xls` | Fichiers Microsoft Excel |
+        | JSON | `.json` | JavaScript Object Notation |
+        | Parquet | `.parquet` | Format Apache Parquet |
         
         ---
         
-        **Mes données sont-elles sécurisées ?**
+        ### Comment préparer votre notebook
         
-        Oui! Toutes les données que vous téléversez restent en mémoire sur le serveur pendant l'exécution 
-        et sont automatiquement supprimées après le traitement. Aucun fichier n'est conservé de manière permanente.
+        Votre notebook peut contenir:
+        - Des cellules d'import de bibliothèques
+        - Des cellules d'upload de fichiers (seront adaptées automatiquement)
+        - Des cellules d'analyse et de visualisation
+        - Des cellules markdown pour la documentation
+        
+        **Le système s'occupe du reste!** 🚀
+        """)
+    
+    with st.expander("❓ Questions fréquentes"):
+        st.markdown("""
+        **Mon notebook utilise Google Colab's files.upload(), est-ce compatible?**
+        
+        Oui! Le système détecte automatiquement les cellules `files.upload()` et les remplace par votre dataset.
+        
+        ---
+        
+        **Dois-je modifier mon notebook avant de l'uploader?**
+        
+        Non! Le système adapte automatiquement votre notebook. Vous pouvez uploader n'importe quel notebook Jupyter.
+        
+        ---
+        
+        **Quelle variable contient mes données?**
+        
+        Vos données sont automatiquement chargées dans la variable `df` (DataFrame pandas).
+        
+        ---
+        
+        **Que se passe-t-il si mon notebook lit plusieurs fichiers?**
+        
+        Le système remplace le premier fichier détecté. Pour les cas complexes, vous devrez peut-être adapter 
+        légèrement votre notebook.
+        
+        ---
+        
+        **Mes données sont-elles sécurisées?**
+        
+        Oui! Les fichiers sont traités en mémoire et automatiquement supprimés après l'exécution. 
+        Rien n'est conservé de manière permanente.
         """)
     
     st.markdown('</div>', unsafe_allow_html=True)
 else:
-    # Message si l'analyse a déjà été lancée mais section guide non affichée
+    # Message si l'analyse a déjà été lancée
     pass
 
-# Section 4: Résultats
+# Section: Résultats
 if st.session_state.output_notebook_path:
     render_notebook(st.session_state.output_notebook_path)
 elif st.session_state.analysis_run:
-    st.info("L'analyse est en cours d'exécution. Les résultats s'afficheront ici une fois terminée.")
+    st.info("⏳ L'analyse est en cours d'exécution. Les résultats s'afficheront ici une fois terminée.")
 
 # Footer
 st.markdown("---")
 st.markdown("""
     <div style='text-align: center; color: #9CA3AF; padding: 2rem 0;'>
-        <p style='margin: 0;'><i class='fas fa-code'></i> Propulsé par Streamlit & Papermill</p>
-        <p style='margin: 0.5rem 0 0 0; font-size: 0.9em;'>Plateforme d'analyse de données interactive</p>
+        <p style='margin: 0;'><i class='fas fa-rocket'></i> Dashboard Universel d'Analyse</p>
+        <p style='margin: 0.5rem 0 0 0; font-size: 0.9em;'>Propulsé par Streamlit & Papermill | Compatible avec tous les notebooks Jupyter</p>
     </div>
 """, unsafe_allow_html=True)

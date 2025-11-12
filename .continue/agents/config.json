@@ -1,0 +1,17 @@
+{
+  "name": "Local Agent",
+  "version": "1.0.0",
+  "schema": "v1",
+  "models": [
+    {
+      "title": "Llama 3 Local",
+      "provider": "ollama",
+      "model": "llama3"
+    },
+    {
+      "title": "Autodetect",
+      "provider": "ollama",
+      "model": "AUTODETECT"
+    }
+  ]
+}
