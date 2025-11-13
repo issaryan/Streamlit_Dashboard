@@ -394,6 +394,19 @@ def adapt_notebook_for_multiple_datasets(notebook_file, dataset_files_dict):
             r'open\s*\(',
         ]
         
+        # NOUVEAU: Détecter si le notebook définit des colonnes manuellement
+        columns_definition_pattern = r'(train|test|df)\.columns\s*=\s*\[?["\']'
+        has_column_definition = False
+        column_definition_cell_index = -1
+        
+        for i, cell in enumerate(nb.cells):
+            if cell.cell_type == 'code':
+                if re.search(columns_definition_pattern, cell.source):
+                    has_column_definition = True
+                    column_definition_cell_index = i
+                    st.info(f"📝 Détection: Le notebook définit les colonnes dans la cellule #{i+1}")
+                    break
+        
         # Créer la cellule d'injection pour TOUS les datasets
         datasets_code = "# 🔄 CELLULE INJECTÉE AUTOMATIQUEMENT PAR LE DASHBOARD\n"
         datasets_code += "# Chargement automatique de TOUS les datasets uploadés\n\n"
@@ -437,13 +450,23 @@ def adapt_notebook_for_multiple_datasets(notebook_file, dataset_files_dict):
         datasets_code += "if 'df' in locals():\n    print(f'   • df: {{df.shape}}')\n"
         datasets_code += "print('='*70)\n\n"
         
+        # Afficher les colonnes de chaque dataset
+        datasets_code += "print('\\n🔍 COLONNES DES DATASETS:')\nprint('='*70)\n"
+        for role in dataset_files_dict.keys():
+            datasets_code += f"print(f'\\n📊 Colonnes de {role}:')\n"
+            datasets_code += f"for i, col in enumerate({role}.columns, 1):\n"
+            datasets_code += f"    print(f'   {{i:2d}}. {{col}}')\n"
+        
+        datasets_code += "\nprint('\\n' + '='*70)\n"
+        datasets_code += "print('⚠️  IMPORTANT: Vérifiez que les colonnes correspondent à celles attendues')\n"
+        datasets_code += "print('    par le notebook. Si elles diffèrent, ajoutez une cellule pour les')\n"
+        datasets_code += "print('    renommer après cette cellule.')\n"
+        datasets_code += "print('='*70)\n\n"
+        
         # Afficher aperçu du premier dataset
         first_role = list(dataset_files_dict.keys())[0]
         datasets_code += f"print('\\n📊 Aperçu du dataset {first_role}:')\n"
         datasets_code += f"display({first_role}.head())\n"
-        datasets_code += f"print('\\n🔍 Colonnes de {first_role}:')\n"
-        datasets_code += f"for i, col in enumerate({first_role}.columns, 1):\n"
-        datasets_code += f"    print(f'   {{i:2d}}. {{col}}')\n"
         
         injection_cell = nbformat.v4.new_code_cell(source=datasets_code)
         
@@ -481,6 +504,18 @@ def adapt_notebook_for_multiple_datasets(notebook_file, dataset_files_dict):
 {commented_source}
 """
                     st.info(f"📝 Cellule #{i+1} adaptée: Lecture de fichier désactivée")
+                
+                # Si c'est la cellule qui définit les colonnes, ajouter un avertissement
+                if i == column_definition_cell_index:
+                    st.warning(f"""
+⚠️ **Attention:** La cellule #{i+1} définit les noms de colonnes.
+                    
+Assurez-vous que:
+1. Vos datasets ont le bon nombre de colonnes
+2. Les colonnes correspondent à celles définies dans le notebook
+                    
+Si vos datasets ont déjà les bons noms de colonnes, vous pouvez désactiver cette cellule.
+""")
                 
                 if not injection_done and has_imports and 'import' in cell_source.lower():
                     modified_cells.append(cell)
@@ -754,6 +789,84 @@ with st.sidebar:
     
     if uploaded_notebook:
         st.success(f"✓ {uploaded_notebook.name}")
+    with st.expander("❗ Résolution des Erreurs Courantes"):
+        st.markdown("""
+        ### Erreur: "Could not interpret value X for column"
+        
+        **Cause:** Vos datasets n'ont pas les colonnes attendues par le notebook.
+        
+        **Exemple d'erreur:**
+        ```
+        ValueError: Could not interpret value 'attack' for x. 
+        An entry with this name does not appear in data.
+        ```
+        
+        Cela signifie que le notebook cherche une colonne `attack` qui n'existe pas dans vos datasets.
+        
+        ---
+        
+        ### 🔧 Solutions
+        
+        #### Solution 1: Renommer les colonnes de vos datasets (AVANT upload)
+        
+        Si vos CSV n'ont pas les bons noms de colonnes, renommez-les:
+        ```python
+        import pandas as pd
+        
+        # Charger votre dataset
+        df = pd.read_csv('votre_fichier.csv')
+        
+        # Définir les nouveaux noms de colonnes (dans l'ordre)
+        new_columns = ["duration", "protocol_type", "service", "flag", ...]
+        df.columns = new_columns
+        
+        # Sauvegarder avec les nouveaux noms
+        df.to_csv('train_renomme.csv', index=False)
+        df.to_csv('test_renomme.csv', index=False)
+        ```
+        
+        #### Solution 2: Modifier le notebook pour désactiver la définition des colonnes
+        
+        Si votre notebook contient une cellule comme:
+        ```python
+        columns = ["duration", "protocol_type", ...]
+        train.columns = columns
+        test.columns = columns
+        ```
+        
+        Et que vos datasets ont DÉJÀ les bons noms de colonnes, cette cellule causera un problème.
+        
+        **Action:** Commentez ou supprimez cette cellule du notebook avant de l'uploader.
+        
+        #### Solution 3: Vérifier la compatibilité
+        
+        Regardez les colonnes affichées lors du chargement et comparez avec ce que le notebook attend.
+        
+        **Colonnes de vos datasets:** Affichées dans les onglets ci-dessus
+        
+        **Colonnes attendues par le notebook:** Regardez les messages d'erreur ou le code du notebook
+        
+        ---
+        
+        ### 📋 Pour votre notebook spécifique
+        
+        D'après le code fourni, le notebook attend 43 colonnes nommées:
+        ```
+        duration, protocol_type, service, flag, src_bytes, dst_bytes, land, 
+        wrong_fragment, urgent, hot, num_failed_logins, logged_in, 
+        num_compromised, root_shell, su_attempted, num_root, 
+        num_file_creations, num_shells, num_access_files, num_outbound_cmds, 
+        is_host_login, is_guest_login, count, srv_count, serror_rate, 
+        srv_serror_rate, rerror_rate, srv_rerror_rate, same_srv_rate, 
+        diff_srv_rate, srv_diff_host_rate, dst_host_count, dst_host_srv_count, 
+        dst_host_same_srv_rate, dst_host_diff_srv_rate, 
+        dst_host_same_src_port_rate, dst_host_srv_diff_host_rate, 
+        dst_host_serror_rate, dst_host_srv_serror_rate, dst_host_rerror_rate, 
+        dst_host_srv_rerror_rate, attack, last_flag
+        ```
+        
+        **Assurez-vous que vos fichiers Train.csv et Test.csv ont exactement ces 43 colonnes dans cet ordre!**
+        """)
     
     st.markdown('</div>', unsafe_allow_html=True)
     st.markdown("---")
