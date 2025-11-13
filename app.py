@@ -411,9 +411,19 @@ def adapt_notebook_for_dataset(notebook_file, dataset_path):
     - Injecte le chemin du dataset dans une variable globale
     """
     try:
-        # Lire le notebook
-        notebook_content = notebook_file.read()
-        nb = nbformat.reads(notebook_content.decode('utf-8'), as_version=4)
+        # Lire le notebook - GÉRER LE CAS OÙ LE FICHIER A DÉJÀ ÉTÉ LU
+        if hasattr(notebook_file, 'read'):
+            # Réinitialiser le pointeur de fichier au début
+            notebook_file.seek(0)
+            notebook_content = notebook_file.read()
+        else:
+            notebook_content = notebook_file
+        
+        # Décoder si nécessaire
+        if isinstance(notebook_content, bytes):
+            notebook_content = notebook_content.decode('utf-8')
+        
+        nb = nbformat.reads(notebook_content, as_version=4)
         
         # Patterns à détecter pour l'upload de fichiers
         upload_patterns = [
@@ -421,9 +431,9 @@ def adapt_notebook_for_dataset(notebook_file, dataset_path):
             r'input\(',  # Jupyter input
             r'st\.file_uploader',  # Streamlit
             r'FileUpload',  # ipywidgets
-            r'pd\.read_csv\([\'"](?!http)[^\'"]+[\'"]\)',  # Lecture de fichiers locaux
-            r'pd\.read_excel\([\'"](?!http)[^\'"]+[\'"]\)',
-            r'open\([\'"][^\'"]+[\'"]',  # Open file
+            r'pd\.read_csv\s*\(',  # Lecture de fichiers CSV - CAPTURE TOUS LES read_csv
+            r'pd\.read_excel\s*\(',  # Lecture de fichiers Excel
+            r'open\s*\(',  # Open file
         ]
         
         # Variable pour stocker le nom de la variable du dataframe
@@ -465,23 +475,55 @@ if os.path.exists(DATASET_PATH):
         # Tentative de lecture CSV par défaut
         df = pd.read_csv(DATASET_PATH)
     
+    # IMPORTANT: Créer les variables train et test avec le même dataset
+    # Pour permettre la compatibilité avec les notebooks qui utilisent train/test
+    train = df.copy()
+    test = df.copy()
+    
     print(f"✅ Dataset chargé avec succès: {{df.shape[0]}} lignes, {{df.shape[1]}} colonnes")
     print(f"📊 Colonnes disponibles: {{list(df.columns)}}")
+    print(f"")
+    print(f"💡 Variables créées:")
+    print(f"   - 'df' : DataFrame principal")
+    print(f"   - 'train' : Copie du dataset (pour compatibilité)")
+    print(f"   - 'test' : Copie du dataset (pour compatibilité)")
+    print(f"")
+    print(f"⚠️ Note: Si votre notebook utilise train/test séparés,")
+    print(f"   pensez à faire un train_test_split après le chargement.")
     
     # Afficher un aperçu
     display(df.head())
 else:
     print(f"❌ Erreur: Fichier non trouvé à {{DATASET_PATH}}")
     df = pd.DataFrame()  # DataFrame vide par sécurité
+    train = pd.DataFrame()
+    test = pd.DataFrame()
 """)
         
         # Traiter chaque cellule du notebook
         modified_cells = []
         injection_done = False
+        has_imports = False
+        
+        # VÉRIFICATION: S'assurer qu'il y a des cellules
+        if not nb.cells or len(nb.cells) == 0:
+            st.warning("⚠️ Le notebook semble vide. Ajout de la cellule d'injection uniquement.")
+            nb.cells = [injection_cell]
+            
+            # Sauvegarder le notebook modifié
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".ipynb", mode='w', encoding='utf-8') as temp_nb:
+                nbformat.write(nb, temp_nb)
+                modified_notebook_path = temp_nb.name
+            
+            return modified_notebook_path
         
         for i, cell in enumerate(nb.cells):
             if cell.cell_type == 'code':
                 cell_source = cell.source
+                
+                # Détecter si la cellule contient des imports
+                if 'import' in cell_source.lower():
+                    has_imports = True
                 
                 # Détecter les cellules d'upload/lecture de fichiers
                 is_upload_cell = any(re.search(pattern, cell_source) for pattern in upload_patterns)
@@ -490,21 +532,22 @@ else:
                     # Commenter la cellule d'upload
                     commented_source = '\n'.join([f'# {line}' for line in cell_source.split('\n')])
                     cell.source = f"""
-# ⚠️ CELLULE DÉSACTIVÉE AUTOMATIQUEMENT
+# ⚠️ CELLULE DÉSACTIVÉE AUTOMATIQUEMENT PAR LE DASHBOARD
 # Cette cellule a été détectée comme cellule d'upload/lecture de fichier
-# Le dataset est maintenant chargé automatiquement via la variable 'df'
+# Les données sont maintenant chargées automatiquement via les variables:
+#   - 'df' : DataFrame principal
+#   - 'train' : pour compatibilité avec notebooks train/test
+#   - 'test' : pour compatibilité avec notebooks train/test
 
 {commented_source}
 
-# 💡 Utilisez directement la variable 'df' pour accéder aux données
+# 💡 Utilisez directement les variables 'df', 'train' ou 'test' pour accéder aux données
+# 📝 Si vous avez besoin de séparer train/test, utilisez train_test_split après
 """
-                    st.info(f"📝 Cellule #{i+1} adaptée: Upload de fichier désactivé")
+                    st.info(f"📝 Cellule #{i+1} adaptée: Lecture de fichier désactivée (variables df/train/test disponibles)")
                 
                 # Injecter la cellule de chargement juste après les imports
-                if not injection_done and (
-                    'import' in cell_source.lower() or 
-                    i == 0  # Ou en première position si pas d'import
-                ):
+                if not injection_done and has_imports and 'import' in cell_source.lower():
                     modified_cells.append(cell)
                     modified_cells.append(injection_cell)
                     injection_done = True
@@ -517,6 +560,7 @@ else:
         # Si l'injection n'a pas été faite (pas d'imports détectés), l'ajouter au début
         if not injection_done:
             modified_cells.insert(0, injection_cell)
+            st.info("📝 Cellule d'injection ajoutée au début du notebook (aucun import détecté)")
         
         # Créer le nouveau notebook
         nb.cells = modified_cells
@@ -528,8 +572,17 @@ else:
         
         return modified_notebook_path
         
+    except nbformat.reader.NotJSONError as e:
+        st.error(f"❌ Le fichier n'est pas un notebook Jupyter valide: {str(e)}")
+        raise e
+    except json.JSONDecodeError as e:
+        st.error(f"❌ Erreur de format JSON dans le notebook: {str(e)}")
+        raise e
     except Exception as e:
         st.error(f"❌ Erreur lors de l'adaptation du notebook: {str(e)}")
+        import traceback
+        with st.expander("🔍 Trace complète de l'erreur"):
+            st.code(traceback.format_exc())
         raise e
 
 
@@ -925,13 +978,34 @@ if uploaded_notebook:
     section_header("fas fa-file-code", "Informations sur le Notebook")
     
     try:
+        # Réinitialiser le pointeur de fichier
+        uploaded_notebook.seek(0)
         notebook_content = uploaded_notebook.getvalue()
-        nb = nbformat.reads(notebook_content.decode('utf-8'), as_version=4)
         
-        # Statistiques du notebook
-        code_cells = sum(1 for cell in nb.cells if cell.cell_type == 'code')
-        markdown_cells = sum(1 for cell in nb.cells if cell.cell_type == 'markdown')
-        total_cells = len(nb.cells)
+        # Validation du contenu
+        if not notebook_content or len(notebook_content) == 0:
+            st.error("❌ Le fichier notebook est vide.")
+        else:
+            try:
+                nb = nbformat.reads(notebook_content.decode('utf-8'), as_version=4)
+            except UnicodeDecodeError:
+                st.error("❌ Erreur d'encodage du fichier. Assurez-vous qu'il s'agit d'un fichier UTF-8 valide.")
+                raise
+            except Exception as e:
+                st.error(f"❌ Le fichier ne semble pas être un notebook Jupyter valide: {str(e)}")
+                raise
+        
+        # Vérifier que le notebook contient des cellules
+        if not hasattr(nb, 'cells') or not nb.cells or len(nb.cells) == 0:
+            st.warning("⚠️ Le notebook ne contient aucune cellule.")
+            code_cells = 0
+            markdown_cells = 0
+            total_cells = 0
+        else:
+            # Statistiques du notebook
+            code_cells = sum(1 for cell in nb.cells if cell.cell_type == 'code')
+            markdown_cells = sum(1 for cell in nb.cells if cell.cell_type == 'markdown')
+            total_cells = len(nb.cells)
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -943,18 +1017,28 @@ if uploaded_notebook:
         with col4:
             # Détecter les imports
             imports = set()
-            for cell in nb.cells:
-                if cell.cell_type == 'code':
-                    lines = cell.source.split('\n')
-                    for line in lines:
-                        if 'import' in line:
-                            imports.add(line.strip().split()[1].split('.')[0])
+            if total_cells > 0:
+                for cell in nb.cells:
+                    if cell.cell_type == 'code':
+                        lines = cell.source.split('\n')
+                        for line in lines:
+                            if 'import' in line and not line.strip().startswith('#'):
+                                try:
+                                    # Extraire le nom du module
+                                    parts = line.strip().split()
+                                    if len(parts) >= 2:
+                                        if parts[0] == 'import':
+                                            imports.add(parts[1].split('.')[0])
+                                        elif parts[0] == 'from' and len(parts) >= 4:
+                                            imports.add(parts[1].split('.')[0])
+                                except:
+                                    pass
             stat_card("fas fa-puzzle-piece", len(imports), "Bibliothèques")
         
         st.markdown("<br>", unsafe_allow_html=True)
         
         # Afficher les bibliothèques détectées
-        if imports:
+        if imports and len(imports) > 0:
             with st.expander("📦 Bibliothèques détectées dans le notebook", expanded=False):
                 st.write("Assurez-vous que ces bibliothèques sont installées:")
                 imports_list = sorted(list(imports))
@@ -964,20 +1048,27 @@ if uploaded_notebook:
                         st.markdown(f"- `{lib}`")
         
         # Afficher un aperçu du code
-        with st.expander("👁️ Aperçu du notebook", expanded=False):
-            st.info("Le notebook sera automatiquement adapté pour utiliser votre dataset uploadé.")
-            
-            for i, cell in enumerate(nb.cells[:5]):  # Montrer les 5 premières cellules
-                if cell.cell_type == 'code':
-                    st.markdown(f"**Cellule #{i+1} (Code):**")
-                    st.code(cell.source[:500] + ("..." if len(cell.source) > 500 else ""), language='python')
-                elif cell.cell_type == 'markdown':
-                    st.markdown(f"**Cellule #{i+1} (Markdown):**")
-                    st.markdown(cell.source[:300] + ("..." if len(cell.source) > 300 else ""))
-                st.markdown("---")
-            
-            if len(nb.cells) > 5:
-                st.caption(f"... et {len(nb.cells) - 5} cellule(s) supplémentaire(s)")
+        if total_cells > 0:
+            with st.expander("👁️ Aperçu du notebook", expanded=False):
+                st.info("Le notebook sera automatiquement adapté pour utiliser votre dataset uploadé.")
+                
+                cells_to_show = min(5, len(nb.cells))
+                for i in range(cells_to_show):
+                    cell = nb.cells[i]
+                    if cell.cell_type == 'code':
+                        st.markdown(f"**Cellule #{i+1} (Code):**")
+                        preview_text = cell.source[:500] + ("..." if len(cell.source) > 500 else "")
+                        st.code(preview_text, language='python')
+                    elif cell.cell_type == 'markdown':
+                        st.markdown(f"**Cellule #{i+1} (Markdown):**")
+                        preview_text = cell.source[:300] + ("..." if len(cell.source) > 300 else "")
+                        st.markdown(preview_text)
+                    st.markdown("---")
+                
+                if len(nb.cells) > 5:
+                    st.caption(f"... et {len(nb.cells) - 5} cellule(s) supplémentaire(s)")
+        else:
+            st.warning("⚠️ Le notebook est vide ou ne contient aucune cellule à afficher.")
         
     except Exception as e:
         st.warning(f"⚠️ Impossible de lire le notebook: {str(e)}")
