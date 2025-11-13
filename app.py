@@ -422,8 +422,42 @@ def adapt_notebook_for_multiple_datasets(notebook_file, dataset_files_dict):
             datasets_code += f"DATASET_{role.upper()}_PATH = r'{path}'\n"
             datasets_code += f"if os.path.exists(DATASET_{role.upper()}_PATH):\n"
             datasets_code += f"    file_ext = os.path.splitext(DATASET_{role.upper()}_PATH)[1].lower()\n"
+            datasets_code += f"    \n"
+            datasets_code += f"    # Chargement du fichier\n"
             datasets_code += f"    if file_ext == '.csv':\n"
-            datasets_code += f"        {role} = pd.read_csv(DATASET_{role.upper()}_PATH)\n"
+            datasets_code += f"        # Tenter de détecter si le CSV a des en-têtes\n"
+            datasets_code += f"        try:\n"
+            datasets_code += f"            # Lire les premières lignes pour détecter\n"
+            datasets_code += f"            sample = pd.read_csv(DATASET_{role.upper()}_PATH, nrows=5)\n"
+            datasets_code += f"            \n"
+            datasets_code += f"            # Si les colonnes sont des nombres (0, 1, 2...), pas d'en-tête\n"
+            datasets_code += f"            if all(isinstance(col, int) or str(col).isdigit() for col in sample.columns):\n"
+            datasets_code += f"                print(f'⚠️  Dataset {role}: AUCUN EN-TÊTE détecté - Application automatique des noms')\n"
+            datasets_code += f"                # Définir les colonnes attendues (43 colonnes)\n"
+            datasets_code += f"                columns = [\n"
+            datasets_code += f"                    'duration', 'protocol_type', 'service', 'flag', 'src_bytes',\n"
+            datasets_code += f"                    'dst_bytes', 'land', 'wrong_fragment', 'urgent', 'hot',\n"
+            datasets_code += f"                    'num_failed_logins', 'logged_in', 'num_compromised', 'root_shell',\n"
+            datasets_code += f"                    'su_attempted', 'num_root', 'num_file_creations', 'num_shells',\n"
+            datasets_code += f"                    'num_access_files', 'num_outbound_cmds', 'is_host_login',\n"
+            datasets_code += f"                    'is_guest_login', 'count', 'srv_count', 'serror_rate',\n"
+            datasets_code += f"                    'srv_serror_rate', 'rerror_rate', 'srv_rerror_rate', 'same_srv_rate',\n"
+            datasets_code += f"                    'diff_srv_rate', 'srv_diff_host_rate', 'dst_host_count',\n"
+            datasets_code += f"                    'dst_host_srv_count', 'dst_host_same_srv_rate', 'dst_host_diff_srv_rate',\n"
+            datasets_code += f"                    'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate',\n"
+            datasets_code += f"                    'dst_host_serror_rate', 'dst_host_srv_serror_rate', 'dst_host_rerror_rate',\n"
+            datasets_code += f"                    'dst_host_srv_rerror_rate', 'attack', 'last_flag'\n"
+            datasets_code += f"                ]\n"
+            datasets_code += f"                # Charger sans header et appliquer les noms\n"
+            datasets_code += f"                {role} = pd.read_csv(DATASET_{role.upper()}_PATH, header=None, names=columns)\n"
+            datasets_code += f"                print(f'✅ Colonnes appliquées automatiquement: {{len(columns)}} colonnes')\n"
+            datasets_code += f"            else:\n"
+            datasets_code += f"                # Le CSV a des en-têtes normaux\n"
+            datasets_code += f"                {role} = pd.read_csv(DATASET_{role.upper()}_PATH)\n"
+            datasets_code += f"                print(f'✅ En-têtes détectés: {{list({role}.columns[:5])}}...')\n"
+            datasets_code += f"        except Exception as e:\n"
+            datasets_code += f"            print(f'⚠️  Erreur lors de la détection: {{e}}')\n"
+            datasets_code += f"            {role} = pd.read_csv(DATASET_{role.upper()}_PATH)\n"
             datasets_code += f"    elif file_ext in ['.xlsx', '.xls']:\n"
             datasets_code += f"        {role} = pd.read_excel(DATASET_{role.upper()}_PATH)\n"
             datasets_code += f"    elif file_ext == '.json':\n"
@@ -432,6 +466,7 @@ def adapt_notebook_for_multiple_datasets(notebook_file, dataset_files_dict):
             datasets_code += f"        {role} = pd.read_parquet(DATASET_{role.upper()}_PATH)\n"
             datasets_code += f"    else:\n"
             datasets_code += f"        {role} = pd.read_csv(DATASET_{role.upper()}_PATH)\n"
+            datasets_code += f"    \n"
             datasets_code += f"    print(f'✓ {role.upper()}: {{{role}.shape[0]}} lignes × {{{role}.shape[1]}} colonnes')\n"
             datasets_code += f"else:\n"
             datasets_code += f"    print(f'❌ Fichier {role} introuvable')\n"
@@ -665,7 +700,7 @@ def render_notebook(notebook_path):
             st.code(traceback.format_exc())
 
 
-def execute_notebook_job(notebook_file, dataset_files_dict):
+def execute_notebook_job(notebook_file, dataset_files_dict, force_no_header=None):
     """Exécute le notebook avec plusieurs datasets."""
     adapted_notebook_path = None
     dataset_paths = {}
@@ -678,11 +713,69 @@ def execute_notebook_job(notebook_file, dataset_files_dict):
         progress_bar.progress(10)
         time.sleep(0.3)
         
-        # Sauvegarder tous les datasets
+        # Sauvegarder tous les datasets et vérifier leur structure
+        datasets_info = {}
         for role, file_obj in dataset_files_dict.items():
             with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_obj.name)[1]) as temp_file:
                 temp_file.write(file_obj.getvalue())
                 dataset_paths[role] = temp_file.name
+            
+            # Charger et analyser le dataset
+            try:
+                file_ext = os.path.splitext(file_obj.name)[1].lower()
+                
+                # Détecter si CSV sans en-tête
+                if file_ext == '.csv':
+                    # Lire un échantillon pour détecter
+                    sample = pd.read_csv(dataset_paths[role], nrows=5)
+                    has_numeric_columns = all(isinstance(col, int) or str(col).isdigit() for col in sample.columns)
+                    
+                    if force_no_header is True or (force_no_header is None and has_numeric_columns):
+                        # CSV sans en-tête détecté
+                        st.warning(f"⚠️ {role.upper()}: CSV sans en-tête détecté - Application automatique des noms de colonnes")
+                        columns = [
+                            'duration', 'protocol_type', 'service', 'flag', 'src_bytes',
+                            'dst_bytes', 'land', 'wrong_fragment', 'urgent', 'hot',
+                            'num_failed_logins', 'logged_in', 'num_compromised', 'root_shell',
+                            'su_attempted', 'num_root', 'num_file_creations', 'num_shells',
+                            'num_access_files', 'num_outbound_cmds', 'is_host_login',
+                            'is_guest_login', 'count', 'srv_count', 'serror_rate',
+                            'srv_serror_rate', 'rerror_rate', 'srv_rerror_rate', 'same_srv_rate',
+                            'diff_srv_rate', 'srv_diff_host_rate', 'dst_host_count',
+                            'dst_host_srv_count', 'dst_host_same_srv_rate', 'dst_host_diff_srv_rate',
+                            'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate',
+                            'dst_host_serror_rate', 'dst_host_srv_serror_rate', 'dst_host_rerror_rate',
+                            'dst_host_srv_rerror_rate', 'attack', 'last_flag'
+                        ]
+                        df_check = pd.read_csv(dataset_paths[role], header=None, names=columns)
+                    else:
+                        df_check = pd.read_csv(dataset_paths[role])
+                elif file_ext in ['.xlsx', '.xls']:
+                    df_check = pd.read_excel(dataset_paths[role])
+                elif file_ext == '.json':
+                    df_check = pd.read_json(dataset_paths[role])
+                elif file_ext == '.parquet':
+                    df_check = pd.read_parquet(dataset_paths[role])
+                else:
+                    df_check = pd.read_csv(dataset_paths[role])
+                
+                datasets_info[role] = {
+                    'columns': list(df_check.columns),
+                    'shape': df_check.shape
+                }
+            except Exception as e:
+                st.error(f"❌ Impossible de lire le dataset {role}: {str(e)}")
+                raise
+        
+        # Afficher les informations des datasets
+        st.success(f"✅ Datasets chargés: {', '.join(datasets_info.keys())}")
+        with st.expander("🔍 Structure des datasets uploadés", expanded=True):
+            for role, info in datasets_info.items():
+                st.markdown(f"**{role.upper()}:** {info['shape'][0]} lignes × {info['shape'][1]} colonnes")
+                cols_preview = ', '.join([f"`{col}`" for col in info['columns'][:5]])
+                if len(info['columns']) > 5:
+                    cols_preview += f" ... (+{len(info['columns'])-5} autres)"
+                st.markdown(f"**Colonnes:** {cols_preview}")
         
         status_text.text("🔧 Adaptation automatique du notebook...")
         progress_bar.progress(30)
@@ -718,18 +811,110 @@ def execute_notebook_job(notebook_file, dataset_files_dict):
         status_text.empty()
         
         error_msg = str(e)
-        if "ModuleNotFoundError" in error_msg:
+        
+        # Détection spécifique de l'erreur de colonne manquante
+        if "Could not interpret value" in error_msg or "does not appear in data" in error_msg:
+            # Extraire le nom de la colonne manquante
+            missing_col = None
+            if "Could not interpret value" in error_msg:
+                try:
+                    missing_col = error_msg.split("Could not interpret value")[1].split("for")[0].strip().strip("'\"")
+                except:
+                    pass
+            
+            st.error("❌ **ERREUR: Colonne manquante dans vos datasets**")
+            
+            st.markdown(f"""
+### 🔍 Diagnostic
+            
+Le notebook essaie d'utiliser une colonne qui n'existe pas dans vos datasets.
+
+**Colonne recherchée:** `{missing_col if missing_col else 'Inconnue (voir erreur ci-dessous)'}`
+
+---
+
+### 📊 Vos datasets contiennent:
+""")
+            
+            for role, info in datasets_info.items():
+                with st.expander(f"Colonnes de {role.upper()}", expanded=True):
+                    cols_text = "\n".join([f"{i+1}. `{col}`" for i, col in enumerate(info['columns'])])
+                    st.markdown(cols_text)
+            
+            st.markdown("""
+---
+
+### ✅ Solutions
+
+#### Option 1: Préparer vos datasets avec les bonnes colonnes
+
+Votre notebook attend des colonnes spécifiques. Vous devez:
+
+1. **Télécharger ce script Python:**
+
+```python
+import pandas as pd
+
+# Définir les colonnes attendues par le notebook
+columns_attendues = [
+    "duration", "protocol_type", "service", "flag", "src_bytes", 
+    "dst_bytes", "land", "wrong_fragment", "urgent", "hot", 
+    "num_failed_logins", "logged_in", "num_compromised", "root_shell", 
+    "su_attempted", "num_root", "num_file_creations", "num_shells", 
+    "num_access_files", "num_outbound_cmds", "is_host_login", 
+    "is_guest_login", "count", "srv_count", "serror_rate", 
+    "srv_serror_rate", "rerror_rate", "srv_rerror_rate", "same_srv_rate", 
+    "diff_srv_rate", "srv_diff_host_rate", "dst_host_count", 
+    "dst_host_srv_count", "dst_host_same_srv_rate", 
+    "dst_host_diff_srv_rate", "dst_host_same_src_port_rate", 
+    "dst_host_srv_diff_host_rate", "dst_host_serror_rate", 
+    "dst_host_srv_serror_rate", "dst_host_rerror_rate", 
+    "dst_host_srv_rerror_rate", "attack", "last_flag"
+]
+
+# Charger vos datasets
+train = pd.read_csv('votre_train_actuel.csv')
+test = pd.read_csv('votre_test_actuel.csv')
+
+# Assigner les noms de colonnes
+train.columns = columns_attendues
+test.columns = columns_attendues
+
+# Sauvegarder avec les bons noms
+train.to_csv('Train_corrige.csv', index=False)
+test.to_csv('Test_corrige.csv', index=False)
+
+print("✅ Fichiers corrigés créés!")
+```
+
+2. **Exécuter ce script** avec vos fichiers actuels
+3. **Uploader les fichiers corrigés** (`Train_corrige.csv` et `Test_corrige.csv`)
+
+---
+
+#### Option 2: Utiliser les datasets originaux du notebook
+
+Si vous ne connaissez pas la structure attendue, utilisez les datasets originaux pour lesquels ce notebook a été créé.
+
+---
+""")
+            
+            with st.expander("🔍 Message d'erreur complet"):
+                st.code(error_msg)
+        
+        elif "ModuleNotFoundError" in error_msg:
             module_name = error_msg.split("'")[1] if "'" in error_msg else "unknown"
             st.error(f"""
             **❌ Module manquant: {module_name}**
             
             Solution: `pip install {module_name}`
             """)
+            with st.expander("🔍 Détails de l'erreur"):
+                st.code(error_msg)
         else:
             st.error(f"❌ Erreur lors de l'exécution: {str(e)}")
-        
-        with st.expander("🔍 Détails de l'erreur"):
-            st.code(error_msg)
+            with st.expander("🔍 Détails de l'erreur"):
+                st.code(error_msg)
         
         st.session_state['output_notebook_path'] = None
         
@@ -916,6 +1101,27 @@ with st.sidebar:
         st.success(f"✓ {val_dataset.name}")
         st.session_state.uploaded_datasets['validation'] = val_dataset
     
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # NOUVEAU: Option pour les CSV sans en-têtes
+    st.markdown("### <i class='fas fa-cog'></i> Options CSV", unsafe_allow_html=True)
+    
+    csv_has_header = st.radio(
+        "Vos fichiers CSV ont-ils une ligne d'en-tête ?",
+        options=["🤖 Détection automatique", "✅ Oui, ils ont des en-têtes", "❌ Non, pas d'en-têtes"],
+        index=0,
+        help="Si vos CSV n'ont pas de noms de colonnes en première ligne, sélectionnez 'Non'",
+        key="csv_header_option"
+    )
+    
+    if csv_has_header == "❌ Non, pas d'en-têtes":
+        st.info("📝 Les noms de colonnes seront appliqués automatiquement")
+        st.session_state.force_no_header = True
+    elif csv_has_header == "✅ Oui, ils ont des en-têtes":
+        st.session_state.force_no_header = False
+    else:
+        st.session_state.force_no_header = None  # Auto-detect
+    
     # Détection automatique si les noms ne correspondent pas
     if train_dataset or test_dataset:
         st.markdown("<br>", unsafe_allow_html=True)
@@ -953,7 +1159,10 @@ with st.sidebar:
             if val_dataset:
                 dataset_files['validation'] = val_dataset
             
-            execute_notebook_job(uploaded_notebook, dataset_files)
+            # Passer l'option header
+            header_option = st.session_state.get('force_no_header', None)
+            
+            execute_notebook_job(uploaded_notebook, dataset_files, header_option)
         else:
             if not uploaded_notebook:
                 st.error("⚠️ Notebook manquant")
